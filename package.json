@@ -1,0 +1,8 @@
+{
+  "name": "split-lab",
+  "version": "1.0.0",
+  "description": "Multi-video comparison tool with draggable mask lines and ffmpeg export",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
