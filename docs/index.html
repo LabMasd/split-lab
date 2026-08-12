@@ -102,6 +102,11 @@
   .vid-item .aud { background: none; border: none; font-size: 12px; padding: 0 2px; opacity: .3; }
   .vid-item .aud:hover, .vid-item .aud:active { background: none; transform: none; opacity: .7; }
   .vid-item .aud.on { opacity: 1; }
+  .vid-item .lc {
+    width: 12px; height: 12px; border-radius: 50%; padding: 0; flex-shrink: 0;
+    border: 1px solid var(--line);
+  }
+  .vid-item .lc:hover, .vid-item .lc:active { transform: none; border-color: var(--accent); }
 
   .row { display: flex; align-items: center; gap: 8px; }
   .row > select { flex: 1; }
@@ -209,6 +214,8 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const $ = id => document.getElementById(id);
 
+const LABEL_COLORS = ['#ffffff', '#00c853', '#1a1a1a', '#ced2a1'];
+
 const state = {
   videos: [],      // { file, el, name }
   dividers: [],    // fractions 0..1, length = videos.length - 1
@@ -272,6 +279,15 @@ function renderList() {
     name.type = 'text';
     name.value = v.name;
     name.addEventListener('input', () => { v.name = name.value; });
+    const lc = document.createElement('button');
+    lc.className = 'lc';
+    lc.style.background = v.labelColor || LABEL_COLORS[0];
+    lc.title = 'label colour';
+    lc.addEventListener('click', () => {
+      const cur = LABEL_COLORS.indexOf(v.labelColor || LABEL_COLORS[0]);
+      v.labelColor = LABEL_COLORS[(cur + 1) % LABEL_COLORS.length];
+      renderList();
+    });
     const aud = document.createElement('button');
     aud.className = 'aud' + (v.el.muted ? '' : ' on');
     aud.textContent = v.el.muted ? '🔇' : '🔊';
@@ -281,7 +297,7 @@ function renderList() {
     rm.className = 'rm';
     rm.textContent = '×';
     rm.addEventListener('click', () => removeVideo(i));
-    item.append(badge, name, aud, rm);
+    item.append(badge, name, lc, aud, rm);
     list.append(item);
   });
   $('dropHint').style.display = state.videos.length ? 'none' : 'flex';
@@ -325,9 +341,10 @@ function draw(showLines = true) {
       const label = v.name.toUpperCase();
       const tw = ctx.measureText(label).width;
       const lx = Math.min(xs[i] + pad, xs[i + 1] - tw - pad);
-      ctx.fillStyle = 'rgba(0,0,0,.45)';
+      const color = v.labelColor || LABEL_COLORS[0];
+      ctx.fillStyle = color === '#1a1a1a' ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)';
       ctx.fillRect(lx - 8, pad - 6, tw + 16, ch * 0.028 + 12);
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = color;
       ctx.fillText(label, lx, pad);
     });
   }
