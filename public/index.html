@@ -6,16 +6,20 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
-    --bg: #101012;
-    --panel: #17171a;
-    --line: #2a2a2e;
-    --text: #e8e8e8;
-    --dim: #7a7a80;
-    --accent: #F4501E;
+    --bg: #1a1a1a;
+    --panel: #252525;
+    --hover: #2a2a2a;
+    --line: #333;
+    --text: #e0e0e0;
+    --dim: #888;
+    --accent: #ced2a1;
+    --accent-hover: #dde2b1;
+    --danger: #e57373;
+    --radius: 4px;
   }
   body {
     background: var(--bg); color: var(--text);
-    font: 12px/1.5 "SF Mono", ui-monospace, Menlo, monospace;
+    font: 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     height: 100vh; display: flex; flex-direction: column; overflow: hidden;
     user-select: none;
   }
@@ -33,13 +37,17 @@
 
   select, button, input[type="text"], input[type="number"] {
     background: var(--panel); color: var(--text); border: 1px solid var(--line);
-    font: inherit; font-size: 11px; padding: 4px 8px; border-radius: 4px; outline: none;
+    font: inherit; font-size: 11px; padding: 4px 8px; border-radius: var(--radius); outline: none;
+    transition: all .15s ease;
   }
-  select:hover, button:hover { border-color: #3f3f45; }
-  button { cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-  button.primary:hover { filter: brightness(1.1); }
-  button:disabled { opacity: .4; cursor: default; }
+  select:hover, input[type="number"]:hover { border-color: var(--accent); }
+  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
+  button { cursor: pointer; color: var(--dim); }
+  button:hover { background: var(--hover); border-color: var(--accent); color: var(--accent); }
+  button:active { transform: scale(.96); background: var(--accent); color: var(--bg); }
+  button.primary { color: var(--accent); border-color: var(--accent); font-weight: 600; letter-spacing: .04em; }
+  button.primary:hover { background: var(--hover); border-color: var(--accent-hover); color: var(--accent-hover); }
+  button:disabled { opacity: .4; cursor: default; pointer-events: none; }
 
   .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--dim); }
   .toggle input { accent-color: var(--accent); }
@@ -51,12 +59,12 @@
     padding: 20px; min-width: 0; position: relative;
   }
   #canvasWrap { position: relative; max-width: 100%; max-height: 100%; }
-  canvas { display: block; max-width: 100%; max-height: calc(100vh - 160px); border-radius: 6px; }
+  canvas { display: block; max-width: 100%; max-height: calc(100vh - 160px); border-radius: var(--radius); }
 
   #dropHint {
     position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; color: var(--dim);
-    border: 1px dashed var(--line); border-radius: 8px; margin: 20px;
+    border: 1px dashed var(--line); border-radius: var(--radius); margin: 20px;
     pointer-events: none; text-align: center;
   }
   #dropHint b { color: var(--text); font-size: 14px; letter-spacing: .05em; }
@@ -70,13 +78,14 @@
 
   #videoList { display: flex; flex-direction: column; gap: 6px; }
   .vid-item {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
-    padding: 6px 8px;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 6px 8px; transition: border-color .15s ease;
   }
+  .vid-item:hover { border-color: var(--accent); }
   .vid-item .badge {
-    width: 18px; height: 18px; border-radius: 3px; background: var(--accent);
-    color: #fff; font-size: 10px; font-weight: 700;
+    width: 18px; height: 18px; border-radius: 3px;
+    border: 1px solid var(--accent); color: var(--accent); font-size: 10px; font-weight: 600;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .vid-item input {
@@ -84,8 +93,9 @@
     font-size: 11px; color: var(--text);
   }
   .vid-item .rm { background: none; border: none; color: var(--dim); font-size: 14px; padding: 0 2px; }
-  .vid-item .rm:hover { color: var(--accent); }
+  .vid-item .rm:hover, .vid-item .rm:active { background: none; color: var(--danger); transform: none; }
   .vid-item .aud { background: none; border: none; font-size: 12px; padding: 0 2px; opacity: .3; }
+  .vid-item .aud:hover, .vid-item .aud:active { background: none; transform: none; opacity: .7; }
   .vid-item .aud.on { opacity: 1; }
 
   .row { display: flex; align-items: center; gap: 8px; }
@@ -101,7 +111,7 @@
     padding: 0 16px; height: 52px; border-top: 1px solid var(--line); flex-shrink: 0;
   }
   #playBtn { width: 34px; height: 34px; border-radius: 50%; font-size: 12px; }
-  #timeText { color: var(--dim); font-size: 11px; min-width: 110px; }
+  #timeText { color: var(--dim); font-size: 11px; min-width: 110px; font-variant-numeric: tabular-nums; }
   #scrub { flex: 1; accent-color: var(--accent); height: 4px; cursor: pointer; }
 </style>
 </head>
@@ -303,7 +313,7 @@ function draw(showLines = true) {
   state.videos.forEach((v, i) => drawCover(v, xs[i], xs[i + 1] - xs[i]));
 
   if ($('showLabels').checked) {
-    ctx.font = `600 ${Math.round(ch * 0.028)}px ui-monospace, Menlo, monospace`;
+    ctx.font = `700 ${Math.round(ch * 0.028)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
     ctx.textBaseline = 'top';
     state.videos.forEach((v, i) => {
       const pad = Math.round(ch * 0.025);

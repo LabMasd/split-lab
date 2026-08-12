@@ -4,7 +4,7 @@ Multi-video comparison tool. Load any number of videos — 2, 3, 4, no limit —
 and compare them side by side in one frame, separated by draggable white mask
 lines (grade / before-after wipe style). Export the composite with sound.
 
-![split.lab](https://img.shields.io/badge/masd.lab-split.lab-F4501E)
+![split.lab](https://img.shields.io/badge/masd.lab-split.lab-ced2a1)
 
 ## ▶ Use it in your browser
 
