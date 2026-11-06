@@ -121,12 +121,12 @@
           <option value="rtl">reveal from right &#8592;</option>
         </select>
         <div class="row">
-          <input type="number" id="holdSecs" value="4" min="0" step="0.5" style="width:56px">
-          <span class="label">hold / image</span>
+          <input type="number" id="holdSecs" value="15" min="0" step="1" style="width:56px">
+          <span class="label">frames hold / image</span>
         </div>
         <div class="row">
-          <input type="number" id="animSecs" value="1.5" min="0.3" step="0.1" style="width:56px">
-          <span class="label">sec / wipe</span>
+          <input type="number" id="animSecs" value="15" min="1" step="1" style="width:56px">
+          <span class="label">frames / wipe</span>
         </div>
         <select id="easing">
           <option value="io">ease in-out (smooth)</option>
@@ -403,8 +403,9 @@ function draw(showLines = true, t = null) {
 // ---------- animated split ----------
 
 const animActive = () => !isTiles() && $('animate').checked && state.images.length > 1;
-const wipeSecs = () => Math.max(0.3, parseFloat($('animSecs').value) || 1.5);
-const holdSecs = () => Math.max(0, parseFloat($('holdSecs').value) || 0);
+const fpsNow = () => parseFloat($('fps').value) || 25;
+const wipeSecs = () => Math.max(1, parseFloat($('animSecs').value) || 15) / fpsNow();
+const holdSecs = () => Math.max(0, parseFloat($('holdSecs').value) || 0) / fpsNow();
 const totalSecs = () => { const n = Math.max(1, state.images.length); return n * holdSecs() + (n - 1) * wipeSecs(); };
 
 const easeFns = {
@@ -483,7 +484,7 @@ window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') retu
 function frame() {
   if (!state.exporting) {
     const now = (performance.now() - state.t0) / 1000;
-    $('clipTotal').textContent = `clip length ${totalSecs().toFixed(1)} s`;
+    $('clipTotal').textContent = `clip length ${Math.round(totalSecs() * fpsNow())} frames · ${totalSecs().toFixed(2)} s @ ${fpsNow()} fps`;
     if (isTiles()) draw(true, now % tilesTotal());
     else {
       if (animActive()) state.dividers = animDividers(now % totalSecs());
