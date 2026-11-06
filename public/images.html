@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>split.lab · images</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #1a1a1a; --panel: #252525; --hover: #2a2a2a; --line: #333;
+    --text: #e0e0e0; --dim: #888; --accent: #ced2a1; --accent-hover: #dde2b1;
+    --danger: #e57373; --radius: 4px;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none;
+  }
+  header { display: flex; align-items: center; gap: 16px; padding: 0 16px; height: 44px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  header .logo { font-weight: 700; letter-spacing: .05em; }
+  header .logo span { color: var(--accent); }
+  header .logo em { font-style: normal; color: var(--dim); font-weight: 400; margin-left: 6px; }
+  header a { color: var(--dim); text-decoration: none; font-size: 11px; }
+  header a:hover { color: var(--accent); }
+  header .spacer { flex: 1; }
+  .label { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  select, button, input[type="text"], input[type="number"] {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    font: inherit; font-size: 11px; padding: 4px 8px; border-radius: var(--radius); outline: none; transition: all .15s ease;
+  }
+  select:hover, input[type="number"]:hover { border-color: var(--accent); }
+  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
+  button { cursor: pointer; color: var(--dim); }
+  button:hover { background: var(--hover); border-color: var(--accent); color: var(--accent); }
+  button:active { transform: scale(.96); background: var(--accent); color: var(--bg); }
+  button.primary { color: var(--accent); border-color: var(--accent); font-weight: 600; letter-spacing: .04em; }
+  button.primary:hover { background: var(--hover); border-color: var(--accent-hover); color: var(--accent-hover); }
+  button:disabled { opacity: .4; cursor: default; pointer-events: none; }
+  .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--dim); }
+  .toggle input { accent-color: var(--accent); }
+  main { flex: 1; display: flex; min-height: 0; }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; min-width: 0; position: relative; }
+  #canvasWrap { position: relative; max-width: 100%; max-height: 100%; }
+  canvas { display: block; max-width: 100%; max-height: calc(100vh - 120px); border-radius: var(--radius); }
+  #dropHint {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; color: var(--dim);
+    border: 1px dashed var(--line); border-radius: var(--radius); margin: 20px; pointer-events: none; text-align: center;
+  }
+  #dropHint b { color: var(--text); font-size: 14px; letter-spacing: .05em; }
+  body.dragover #dropHint { border-color: var(--accent); color: var(--accent); }
+  aside { width: 240px; flex-shrink: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; padding: 14px; gap: 14px; overflow-y: auto; }
+  .section { display: flex; flex-direction: column; gap: 8px; }
+  #imgList { display: flex; flex-direction: column; gap: 6px; }
+  .img-item { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; transition: border-color .15s ease; }
+  .img-item:hover { border-color: var(--accent); }
+  .img-item .badge { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .img-item input { flex: 1; min-width: 0; background: none; border: none; padding: 2px 0; font-size: 11px; color: var(--text); }
+  .img-item .rm, .img-item .mv { background: none; border: none; color: var(--dim); font-size: 13px; padding: 0 2px; }
+  .img-item .rm:hover, .img-item .rm:active { background: none; color: var(--danger); transform: none; }
+  .img-item .mv:hover, .img-item .mv:active { background: none; transform: none; color: var(--accent); }
+  .img-item .lc { width: 12px; height: 12px; border-radius: 50%; padding: 0; flex-shrink: 0; border: 1px solid var(--line); }
+  .img-item .lc:hover, .img-item .lc:active { transform: none; border-color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row > select { flex: 1; }
+  #progressWrap { display: none; flex-direction: column; gap: 6px; }
+  #progressBar { height: 4px; background: var(--panel); border-radius: 2px; overflow: hidden; }
+  #progressFill { height: 100%; width: 0%; background: var(--accent); transition: width .1s; }
+  #progressText { font-size: 10px; color: var(--dim); }
+  footer { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 40px; border-top: 1px solid var(--line); flex-shrink: 0; color: var(--dim); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">split<span>.</span>lab<em>images</em></div>
+  <a href="/">← videos</a>
+  <div class="spacer"></div>
+  <label class="toggle"><input type="checkbox" id="showLabels" checked> labels</label>
+  <label class="toggle"><input type="checkbox" id="exportLines" checked> lines in export</label>
+</header>
+
+<main>
+  <div id="stage">
+    <div id="canvasWrap">
+      <canvas id="canvas" width="1920" height="1080"></canvas>
+      <div id="dropHint">
+        <b>DROP IMAGES HERE</b>
+        <div>before / after, source / result — 2, 3, 4… drag the line to compare</div>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="section">
+      <div class="label">Images</div>
+      <div id="imgList"></div>
+      <button id="addBtn">+ add image</button>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </div>
+
+    <div class="section">
+      <div class="label">Split</div>
+      <button id="centerBtn">&#8982; center splits</button>
+      <label class="toggle"><input type="checkbox" id="animate"> animate split</label>
+      <div id="animOpts" style="display:none; flex-direction:column; gap:6px;">
+        <select id="animDir">
+          <option value="ltr">left &#8594; right</option>
+          <option value="rtl">right &#8594; left</option>
+        </select>
+        <div class="row">
+          <input type="number" id="animSecs" value="3" min="0.5" step="0.5" style="width:56px">
+          <span class="label">sec wipe</span>
+          <input type="number" id="holdSecs" value="0.6" min="0" step="0.1" style="width:56px">
+          <span class="label">hold</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="label">Export</div>
+      <button class="primary" id="pngBtn" disabled>SAVE STILL (PNG)</button>
+      <div class="row">
+        <select id="format">
+          <option value="mp4">MP4 · H.264</option>
+          <option value="prores">QuickTime · ProRes 422 HQ</option>
+          <option value="prores4444">QuickTime · ProRes 4444</option>
+        </select>
+      </div>
+      <div class="row">
+        <select id="fps"><option>24</option><option selected>25</option><option>30</option><option>50</option><option>60</option></select>
+        <span class="label">fps</span>
+        <select id="res">
+          <option value="source" selected>source res</option>
+          <option value="1920">1920 wide</option>
+          <option value="1280">1280 wide</option>
+        </select>
+      </div>
+      <button class="primary" id="exportBtn" disabled>EXPORT WIPE VIDEO</button>
+      <div id="progressWrap">
+        <div id="progressBar"><div id="progressFill"></div></div>
+        <div id="progressText"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span id="info">no images</span>
+</footer>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+const LABEL_COLORS = ['#ffffff', '#00c853', '#1a1a1a', '#ced2a1'];
+
+const state = { images: [], dividers: [], dragging: -1, exporting: false, t0: performance.now() };
+
+// ---------- image management ----------
+
+function addFiles(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const img = new Image();
+    const item = { file, img, name: file.name.replace(/\.[^.]+$/, ''), ready: false };
+    img.onload = () => { item.ready = true; sizeCanvas(); updateEnabled(); };
+    img.src = URL.createObjectURL(file);
+    state.images.push(item);
+  }
+  resetDividers();
+  renderList();
+}
+
+function sizeCanvas() {
+  const first = state.images[0];
+  if (!first || !first.ready) return;
+  const w = Math.min(first.img.naturalWidth, 3840);
+  canvas.width = w;
+  canvas.height = Math.round(w * first.img.naturalHeight / first.img.naturalWidth);
+  $('info').textContent = `${state.images.length} image${state.images.length === 1 ? '' : 's'} · canvas ${canvas.width}×${canvas.height} (first image) · others cover-fit`;
+}
+
+function removeImage(i) {
+  URL.revokeObjectURL(state.images[i].img.src);
+  state.images.splice(i, 1);
+  if (state.images.length) sizeCanvas(); else $('info').textContent = 'no images';
+  resetDividers(); renderList(); updateEnabled();
+}
+
+function moveImage(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= state.images.length) return;
+  [state.images[i], state.images[j]] = [state.images[j], state.images[i]];
+  sizeCanvas(); renderList();
+}
+
+function resetDividers() {
+  const n = state.images.length;
+  state.dividers = Array.from({ length: Math.max(0, n - 1) }, (_, i) => (i + 1) / n);
+}
+
+function renderList() {
+  const list = $('imgList');
+  list.innerHTML = '';
+  state.images.forEach((v, i) => {
+    const item = document.createElement('div');
+    item.className = 'img-item';
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.textContent = String.fromCharCode(65 + (i % 26));
+    const name = document.createElement('input');
+    name.type = 'text'; name.value = v.name;
+    name.addEventListener('input', () => { v.name = name.value; });
+    const lc = document.createElement('button');
+    lc.className = 'lc'; lc.style.background = v.labelColor || LABEL_COLORS[0]; lc.title = 'label colour';
+    lc.addEventListener('click', () => {
+      const cur = LABEL_COLORS.indexOf(v.labelColor || LABEL_COLORS[0]);
+      v.labelColor = LABEL_COLORS[(cur + 1) % LABEL_COLORS.length];
+      renderList();
+    });
+    const up = document.createElement('button'); up.className = 'mv'; up.textContent = '‹'; up.title = 'move left';
+    up.addEventListener('click', () => moveImage(i, -1));
+    const dn = document.createElement('button'); dn.className = 'mv'; dn.textContent = '›'; dn.title = 'move right';
+    dn.addEventListener('click', () => moveImage(i, 1));
+    const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '×';
+    rm.addEventListener('click', () => removeImage(i));
+    item.append(badge, name, lc, up, dn, rm);
+    list.append(item);
+  });
+  $('dropHint').style.display = state.images.length ? 'none' : 'flex';
+}
+
+function updateEnabled() {
+  const ok = state.images.length >= 1 && state.images[0].ready && !state.exporting;
+  $('pngBtn').disabled = !ok;
+  $('exportBtn').disabled = !(state.images.length >= 2 && state.images.every(v => v.ready)) || state.exporting;
+}
+
+// ---------- drawing ----------
+
+function drawCover(v, x, w) {
+  if (!v.ready) return;
+  const cw = canvas.width, ch = canvas.height, iw = v.img.naturalWidth, ih = v.img.naturalHeight;
+  const s = Math.max(cw / iw, ch / ih);
+  const dw = iw * s, dh = ih * s;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, 0, w, ch); ctx.clip();
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(v.img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+  ctx.restore();
+}
+
+function draw(showLines = true) {
+  const cw = canvas.width, ch = canvas.height;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
+  const xs = [0, ...state.dividers.map(d => d * cw), cw];
+  state.images.forEach((v, i) => drawCover(v, xs[i], xs[i + 1] - xs[i]));
+
+  if ($('showLabels').checked) {
+    ctx.font = `700 ${Math.round(ch * 0.028)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    ctx.textBaseline = 'top';
+    state.images.forEach((v, i) => {
+      const pad = Math.round(ch * 0.025);
+      const label = v.name.toUpperCase();
+      const tw = ctx.measureText(label).width;
+      const lx = Math.min(xs[i] + pad, xs[i + 1] - tw - pad);
+      const color = v.labelColor || LABEL_COLORS[0];
+      ctx.fillStyle = color === '#1a1a1a' ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)';
+      ctx.fillRect(lx - 8, pad - 6, tw + 16, ch * 0.028 + 12);
+      ctx.fillStyle = color;
+      ctx.fillText(label, lx, pad);
+    });
+  }
+  if (showLines) {
+    const lw = Math.max(2, cw / 960);
+    state.dividers.forEach(d => { ctx.fillStyle = '#fff'; ctx.fillRect(d * cw - lw / 2, 0, lw, ch); });
+  }
+}
+
+// ---------- animated split ----------
+
+const animActive = () => $('animate').checked && state.images.length > 1;
+const wipeSecs = () => Math.max(0.5, parseFloat($('animSecs').value) || 3);
+const holdSecs = () => Math.max(0, parseFloat($('holdSecs').value) || 0);
+const totalSecs = () => wipeSecs() + 2 * holdSecs();
+
+function animDividers(t) {
+  const n = state.images.length, hold = holdSecs(), wipe = wipeSecs();
+  const p = Math.min(1, Math.max(0, (t - hold) / wipe));
+  const clamp01 = x => Math.min(1, Math.max(0, x));
+  const ltr = $('animDir').value === 'ltr';
+  return Array.from({ length: n - 1 }, (_, i) =>
+    ltr ? clamp01(p * (n - 1) - (n - 2 - i)) : 1 - clamp01(p * (n - 1) - i));
+}
+
+$('centerBtn').addEventListener('click', () => { $('animate').checked = false; $('animOpts').style.display = 'none'; resetDividers(); });
+$('animate').addEventListener('change', () => {
+  $('animOpts').style.display = $('animate').checked ? 'flex' : 'none';
+  if (!$('animate').checked) resetDividers();
+  state.t0 = performance.now();
+});
+
+// ---------- divider dragging ----------
+
+const canvasX = e => { const r = canvas.getBoundingClientRect(); return (e.clientX - r.left) / r.width; };
+
+canvas.addEventListener('pointerdown', e => {
+  if (animActive()) return;
+  const fx = canvasX(e), tol = 14 / canvas.getBoundingClientRect().width;
+  let best = -1, bestD = tol;
+  state.dividers.forEach((d, i) => { const dist = Math.abs(d - fx); if (dist < bestD) { bestD = dist; best = i; } });
+  if (best >= 0) { state.dragging = best; canvas.setPointerCapture(e.pointerId); }
+});
+canvas.addEventListener('pointermove', e => {
+  const fx = canvasX(e);
+  if (state.dragging >= 0) {
+    const i = state.dragging;
+    const lo = (i > 0 ? state.dividers[i - 1] : 0) + 0.02;
+    const hi = (i < state.dividers.length - 1 ? state.dividers[i + 1] : 1) - 0.02;
+    state.dividers[i] = Math.min(hi, Math.max(lo, fx));
+  } else {
+    const tol = 14 / canvas.getBoundingClientRect().width;
+    canvas.style.cursor = !animActive() && state.dividers.some(d => Math.abs(d - fx) < tol) ? 'ew-resize' : 'default';
+  }
+});
+canvas.addEventListener('pointerup', () => { state.dragging = -1; });
+
+// ---------- loading ----------
+
+$('addBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+window.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragover'); });
+window.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragover'); });
+window.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('dragover'); addFiles(e.dataTransfer.files); });
+window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; if (e.key === 'c') $('centerBtn').click(); });
+
+// ---------- render loop ----------
+
+function frame() {
+  if (!state.exporting) {
+    if (animActive()) state.dividers = animDividers(((performance.now() - state.t0) / 1000) % totalSecs());
+    draw(true);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- save still ----------
+
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$('pngBtn').addEventListener('click', async () => {
+  draw($('exportLines').checked);
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  const base = state.images.map(v => v.name).join('_vs_').slice(0, 80) || 'split';
+  downloadBlob(blob, `${base}.png`);
+});
+
+// ---------- export wipe video (same local ffmpeg endpoints as the video page) ----------
+
+$('exportBtn').addEventListener('click', async () => {
+  if (state.exporting) return;
+  const fps = parseFloat($('fps').value), format = $('format').value, includeLines = $('exportLines').checked;
+  const wasAnim = animActive();
+  if (!wasAnim) { $('animate').checked = true; $('animOpts').style.display = 'flex'; }
+  const total = Math.floor(totalSecs() * fps);
+
+  const srcW = canvas.width, srcH = canvas.height, resSel = $('res').value;
+  if (resSel !== 'source' && srcW > parseInt(resSel, 10)) {
+    canvas.width = parseInt(resSel, 10);
+    canvas.height = Math.round(canvas.width * srcH / srcW);
+  }
+  canvas.width -= canvas.width % 2; canvas.height -= canvas.height % 2; // h264 needs even dims
+
+  state.exporting = true; updateEnabled();
+  const wrap = $('progressWrap'), fill = $('progressFill'), text = $('progressText');
+  wrap.style.display = 'flex';
+  try {
+    text.textContent = 'starting…';
+    const start = await fetch('/api/start', { method: 'POST' });
+    if (!start.ok) throw new Error('server not reachable — is `node server.js` running?');
+    for (let f = 0; f < total; f++) {
+      state.dividers = animDividers(f / fps);
+      text.textContent = `capturing frame ${f + 1} / ${total}`;
+      draw(includeLines);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      if (!blob) throw new Error('frame capture failed');
+      const up = await fetch(`/api/frame?i=${f}`, { method: 'POST', body: blob });
+      if (!up.ok) throw new Error('frame upload failed');
+      fill.style.width = `${(f / total) * 90}%`;
+    }
+    text.textContent = 'encoding…'; fill.style.width = '95%';
+    const resp = await fetch(`/api/render?fps=${fps}&format=${format}`, { method: 'POST' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const fname = (cd.match(/filename="([^"]+)"/) || [])[1] || `split-lab-images.${format === 'mp4' ? 'mp4' : 'mov'}`;
+    downloadBlob(blob, fname);
+    fill.style.width = '100%'; text.textContent = `done — ${fname}`;
+  } catch (err) {
+    text.textContent = 'export failed: ' + err.message;
+  } finally {
+    canvas.width = srcW; canvas.height = srcH;
+    state.exporting = false;
+    if (!wasAnim) { $('animate').checked = false; $('animOpts').style.display = 'none'; resetDividers(); }
+    state.t0 = performance.now(); updateEnabled();
+    setTimeout(() => { wrap.style.display = 'none'; fill.style.width = '0%'; }, 4000);
+  }
+});
+
+renderList();
+frame();
+</script>
+</body>
+</html>
