@@ -99,6 +99,15 @@
     </div>
 
     <div class="section">
+      <div class="label">Layout</div>
+      <select id="layout">
+        <option value="wipe">wipe · overlay</option>
+        <option value="tiles">side by side · sources → final</option>
+      </select>
+      <button id="nameBtn">name: source 1, source 2… final</button>
+    </div>
+
+    <div class="section" id="splitSection">
       <div class="label">Split</div>
       <button id="centerBtn">&#8982; center splits</button>
       <label class="toggle"><input type="checkbox" id="animate"> animate split</label>
@@ -113,6 +122,16 @@
           <input type="number" id="holdSecs" value="0.6" min="0" step="0.1" style="width:56px">
           <span class="label">hold</span>
         </div>
+      </div>
+    </div>
+
+    <div class="section" id="clipSection" style="display:none">
+      <div class="label">Clip</div>
+      <div class="row">
+        <input type="number" id="stepSecs" value="0.8" min="0.2" step="0.1" style="width:56px">
+        <span class="label">sec / step</span>
+        <input type="number" id="endHold" value="1.5" min="0" step="0.1" style="width:56px">
+        <span class="label">end hold</span>
       </div>
     </div>
 
@@ -135,7 +154,7 @@
           <option value="1280">1280 wide</option>
         </select>
       </div>
-      <button class="primary" id="exportBtn" disabled>EXPORT WIPE VIDEO</button>
+      <button class="primary" id="exportBtn" disabled>EXPORT CLIP</button>
       <div id="progressWrap">
         <div id="progressBar"><div id="progressFill"></div></div>
         <div id="progressText"></div>
@@ -171,7 +190,41 @@ function addFiles(files) {
   renderList();
 }
 
+const TILE = { m: 56, g: 120, label: 96, maxW: 3840 };
+const isTiles = () => $('layout').value === 'tiles';
+
+function tileGeometry() {
+  const imgs = state.images.filter(v => v.ready);
+  const n = imgs.length;
+  const sumAspect = imgs.reduce((a, v) => a + v.img.naturalWidth / v.img.naturalHeight, 0);
+  let H = 1080;
+  const fixed = 2 * TILE.m + (n - 1) * TILE.g;
+  if (fixed + H * sumAspect > TILE.maxW) H = Math.floor((TILE.maxW - fixed) / sumAspect);
+  const contentH = TILE.m + H + TILE.label + TILE.m;
+  let x = TILE.m;
+  const rows = imgs.map(v => {
+    const w = Math.round(H * v.img.naturalWidth / v.img.naturalHeight);
+    const r = { v, x, w, h: H };
+    x += w + TILE.g;
+    return r;
+  });
+  const W0 = Math.round(x - TILE.g + TILE.m);
+  const W = W0 - (W0 % 2);
+  const Hc0 = Math.max(contentH, Math.round(W * 9 / 16));   // standard 16:9 frame, row centred
+  const Hc = Hc0 - (Hc0 % 2);
+  const yOff = Math.round((Hc - contentH) / 2);
+  const tiles = rows.map(r => ({ ...r, y: TILE.m + yOff }));
+  return { tiles, W, H: Hc };
+}
+
 function sizeCanvas() {
+  if (isTiles()) {
+    if (!state.images.length || !state.images.every(v => v.ready)) return;
+    const g = tileGeometry();
+    canvas.width = g.W; canvas.height = g.H;
+    $('info').textContent = `${state.images.length} images · sheet ${canvas.width}×${canvas.height} · each shown whole`;
+    return;
+  }
   const first = state.images[0];
   if (!first || !first.ready) return;
   const w = Math.min(first.img.naturalWidth, 3840);
@@ -250,7 +303,52 @@ function drawCover(v, x, w) {
   ctx.restore();
 }
 
-function draw(showLines = true) {
+const stepSecs = () => Math.max(0.2, parseFloat($('stepSecs').value) || 0.8);
+const fadeSecs = () => Math.min(0.6, stepSecs() * 0.8);
+const tilesTotal = () => (state.images.length - 1) * stepSecs() + fadeSecs() + Math.max(0, parseFloat($('endHold').value) || 0);
+const ease = x => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+
+function drawTiles(t = null) {
+  const cw = canvas.width, ch = canvas.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, cw, ch);
+  if (!state.images.length || !state.images.every(v => v.ready)) return;
+  const geo = tileGeometry();
+  const k = cw / geo.W;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  const { tiles } = geo, n = tiles.length;
+  const alphaOf = i => t == null ? 1 : ease((t - i * stepSecs()) / fadeSecs());
+  const fs = Math.round(TILE.label * 0.34);
+  ctx.imageSmoothingQuality = 'high';
+  tiles.forEach((tl, i) => {
+    const a = alphaOf(i), dy = (1 - a) * 24;
+    ctx.globalAlpha = a;
+    ctx.drawImage(tl.v.img, tl.x, tl.y + dy, tl.w, tl.h);
+    if ($('showLabels').checked) {
+      ctx.font = `700 ${fs}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+      const c = tl.v.labelColor || LABEL_COLORS[0];
+      ctx.fillStyle = c === '#1a1a1a' ? '#888' : c;
+      ctx.fillText(tl.v.name.toUpperCase(), tl.x + tl.w / 2, tl.y + tl.h + TILE.label / 2 + dy);
+      ctx.textAlign = 'start';
+    }
+    if (i < n - 1) {
+      const ao = alphaOf(i + 1);
+      ctx.globalAlpha = ao;
+      const sym = n === 2 ? '\u2192' : (i === n - 2 ? '=' : '+');
+      ctx.font = `400 ${Math.round(TILE.g * 0.7)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ced2a1';
+      ctx.fillText(sym, tl.x + tl.w + TILE.g / 2, tl.y + tl.h / 2);
+      ctx.textAlign = 'start';
+    }
+  });
+  ctx.globalAlpha = 1;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function draw(showLines = true, t = null) {
+  if (isTiles()) return drawTiles(t);
   const cw = canvas.width, ch = canvas.height;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
   const xs = [0, ...state.dividers.map(d => d * cw), cw];
@@ -279,7 +377,7 @@ function draw(showLines = true) {
 
 // ---------- animated split ----------
 
-const animActive = () => $('animate').checked && state.images.length > 1;
+const animActive = () => !isTiles() && $('animate').checked && state.images.length > 1;
 const wipeSecs = () => Math.max(0.5, parseFloat($('animSecs').value) || 3);
 const holdSecs = () => Math.max(0, parseFloat($('holdSecs').value) || 0);
 const totalSecs = () => wipeSecs() + 2 * holdSecs();
@@ -305,7 +403,7 @@ $('animate').addEventListener('change', () => {
 const canvasX = e => { const r = canvas.getBoundingClientRect(); return (e.clientX - r.left) / r.width; };
 
 canvas.addEventListener('pointerdown', e => {
-  if (animActive()) return;
+  if (animActive() || isTiles()) return;
   const fx = canvasX(e), tol = 14 / canvas.getBoundingClientRect().width;
   let best = -1, bestD = tol;
   state.dividers.forEach((d, i) => { const dist = Math.abs(d - fx); if (dist < bestD) { bestD = dist; best = i; } });
@@ -320,7 +418,7 @@ canvas.addEventListener('pointermove', e => {
     state.dividers[i] = Math.min(hi, Math.max(lo, fx));
   } else {
     const tol = 14 / canvas.getBoundingClientRect().width;
-    canvas.style.cursor = !animActive() && state.dividers.some(d => Math.abs(d - fx) < tol) ? 'ew-resize' : 'default';
+    canvas.style.cursor = !isTiles() && !animActive() && state.dividers.some(d => Math.abs(d - fx) < tol) ? 'ew-resize' : 'default';
   }
 });
 canvas.addEventListener('pointerup', () => { state.dragging = -1; });
@@ -338,8 +436,12 @@ window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') retu
 
 function frame() {
   if (!state.exporting) {
-    if (animActive()) state.dividers = animDividers(((performance.now() - state.t0) / 1000) % totalSecs());
-    draw(true);
+    const now = (performance.now() - state.t0) / 1000;
+    if (isTiles()) draw(true, now % tilesTotal());
+    else {
+      if (animActive()) state.dividers = animDividers(now % totalSecs());
+      draw(true);
+    }
   }
   requestAnimationFrame(frame);
 }
@@ -364,9 +466,10 @@ $('pngBtn').addEventListener('click', async () => {
 $('exportBtn').addEventListener('click', async () => {
   if (state.exporting) return;
   const fps = parseFloat($('fps').value), format = $('format').value, includeLines = $('exportLines').checked;
+  const tiles = isTiles();
   const wasAnim = animActive();
-  if (!wasAnim) { $('animate').checked = true; $('animOpts').style.display = 'flex'; }
-  const total = Math.floor(totalSecs() * fps);
+  if (!tiles && !wasAnim) { $('animate').checked = true; $('animOpts').style.display = 'flex'; }
+  const total = Math.floor((tiles ? tilesTotal() : totalSecs()) * fps);
 
   const srcW = canvas.width, srcH = canvas.height, resSel = $('res').value;
   if (resSel !== 'source' && srcW > parseInt(resSel, 10)) {
@@ -383,9 +486,9 @@ $('exportBtn').addEventListener('click', async () => {
     const start = await fetch('/api/start', { method: 'POST' });
     if (!start.ok) throw new Error('server not reachable — is `node server.js` running?');
     for (let f = 0; f < total; f++) {
-      state.dividers = animDividers(f / fps);
       text.textContent = `capturing frame ${f + 1} / ${total}`;
-      draw(includeLines);
+      if (tiles) draw(includeLines, f / fps);
+      else { state.dividers = animDividers(f / fps); draw(includeLines); }
       const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
       if (!blob) throw new Error('frame capture failed');
       const up = await fetch(`/api/frame?i=${f}`, { method: 'POST', body: blob });
@@ -397,7 +500,7 @@ $('exportBtn').addEventListener('click', async () => {
     if (!resp.ok) throw new Error(await resp.text());
     const blob = await resp.blob();
     const cd = resp.headers.get('Content-Disposition') || '';
-    const fname = (cd.match(/filename="([^"]+)"/) || [])[1] || `split-lab-images.${format === 'mp4' ? 'mp4' : 'mov'}`;
+    const fname = (cd.match(/filename="([^"]+)"/) || [])[1] || `split-lab-${tiles ? 'sources' : 'images'}.${format === 'mp4' ? 'mp4' : 'mov'}`;
     downloadBlob(blob, fname);
     fill.style.width = '100%'; text.textContent = `done — ${fname}`;
   } catch (err) {
@@ -405,11 +508,28 @@ $('exportBtn').addEventListener('click', async () => {
   } finally {
     canvas.width = srcW; canvas.height = srcH;
     state.exporting = false;
-    if (!wasAnim) { $('animate').checked = false; $('animOpts').style.display = 'none'; resetDividers(); }
+    if (!tiles && !wasAnim) { $('animate').checked = false; $('animOpts').style.display = 'none'; resetDividers(); }
     state.t0 = performance.now(); updateEnabled();
     setTimeout(() => { wrap.style.display = 'none'; fill.style.width = '0%'; }, 4000);
   }
 });
+
+function applyLayout() {
+  const t = isTiles();
+  $('splitSection').style.display = t ? 'none' : '';
+  $('clipSection').style.display = t ? '' : 'none';
+  $('exportLines').parentElement.style.display = t ? 'none' : '';
+  state.t0 = performance.now();
+  sizeCanvas(); updateEnabled();
+}
+$('layout').addEventListener('change', applyLayout);
+
+function autoName() {
+  const n = state.images.length;
+  state.images.forEach((v, i) => { v.name = (i === n - 1 && n > 1) ? 'Final' : (n > 2 ? `Source ${i + 1}` : 'Source'); });
+  renderList();
+}
+$('nameBtn').addEventListener('click', autoName);
 
 renderList();
 frame();
