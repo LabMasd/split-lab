@@ -117,15 +117,23 @@
       <label class="toggle"><input type="checkbox" id="animate"> animate split</label>
       <div id="animOpts" style="display:none; flex-direction:column; gap:6px;">
         <select id="animDir">
-          <option value="ltr">left &#8594; right</option>
-          <option value="rtl">right &#8594; left</option>
+          <option value="ltr">reveal from left &#8594;</option>
+          <option value="rtl">reveal from right &#8592;</option>
         </select>
         <div class="row">
-          <input type="number" id="animSecs" value="3" min="0.5" step="0.5" style="width:56px">
-          <span class="label">sec wipe</span>
-          <input type="number" id="holdSecs" value="0.6" min="0" step="0.1" style="width:56px">
-          <span class="label">hold</span>
+          <input type="number" id="holdSecs" value="4" min="0" step="0.5" style="width:56px">
+          <span class="label">hold / image</span>
         </div>
+        <div class="row">
+          <input type="number" id="animSecs" value="1.5" min="0.3" step="0.1" style="width:56px">
+          <span class="label">sec / wipe</span>
+        </div>
+        <select id="easing">
+          <option value="io">ease in-out (smooth)</option>
+          <option value="out">ease out</option>
+          <option value="lin">linear</option>
+        </select>
+        <div class="label" id="clipTotal"></div>
       </div>
     </div>
 
@@ -336,11 +344,11 @@ function drawTiles(t = null) {
     ctx.globalAlpha = a;
     ctx.drawImage(tl.v.img, tl.x, tl.y + dy, tl.w, tl.h);
     if ($('showLabels').checked) {
-      ctx.font = `700 ${fs}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+      ctx.font = `500 ${fs}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
       ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
       const c = tl.v.labelColor || LABEL_COLORS[0];
       ctx.fillStyle = c === '#1a1a1a' ? '#888' : c;
-      ctx.fillText(tl.v.name.toUpperCase(), tl.x + tl.w / 2, tl.y + tl.h + TILE.label / 2 + dy);
+      ctx.fillText(tl.v.name, tl.x + tl.w / 2, tl.y + tl.h + TILE.label / 2 + dy);
       ctx.textAlign = 'start';
     }
     if (i < n - 1) {
@@ -358,19 +366,24 @@ function drawTiles(t = null) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
+// image order across the frame: when revealing from the left, the story order is mirrored
+// (first image sits on the right and the later images enter from the left)
+const regionImages = () => (animActive() && $('animDir').value === 'ltr') ? [...state.images].reverse() : state.images;
+
 function draw(showLines = true, t = null) {
   if (isTiles()) return drawTiles(t);
   const cw = canvas.width, ch = canvas.height;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
   const xs = [0, ...state.dividers.map(d => d * cw), cw];
-  state.images.forEach((v, i) => drawCover(v, xs[i], xs[i + 1] - xs[i]));
+  const regions = regionImages();
+  regions.forEach((v, i) => drawCover(v, xs[i], xs[i + 1] - xs[i]));
 
   if ($('showLabels').checked) {
-    ctx.font = `700 ${Math.round(ch * 0.028)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    ctx.font = `500 ${Math.round(ch * 0.032)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
     ctx.textBaseline = 'top';
-    state.images.forEach((v, i) => {
+    regions.forEach((v, i) => {
       const pad = Math.round(ch * 0.025);
-      const label = v.name.toUpperCase();
+      const label = v.name;
       const tw = ctx.measureText(label).width;
       const lx = Math.min(xs[i] + pad, xs[i + 1] - tw - pad);
       if (xs[i + 1] - xs[i] < tw + pad * 2) return;   // region too narrow: skip label so labels never overlap
@@ -390,17 +403,38 @@ function draw(showLines = true, t = null) {
 // ---------- animated split ----------
 
 const animActive = () => !isTiles() && $('animate').checked && state.images.length > 1;
-const wipeSecs = () => Math.max(0.5, parseFloat($('animSecs').value) || 3);
+const wipeSecs = () => Math.max(0.3, parseFloat($('animSecs').value) || 1.5);
 const holdSecs = () => Math.max(0, parseFloat($('holdSecs').value) || 0);
-const totalSecs = () => wipeSecs() + 2 * holdSecs();
+const totalSecs = () => { const n = Math.max(1, state.images.length); return n * holdSecs() + (n - 1) * wipeSecs(); };
+
+const easeFns = {
+  io: x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+  out: x => 1 - Math.pow(1 - x, 3),
+  lin: x => x,
+};
+
+// stage s in [0, n-1]: hold on image j, ease to j+1, hold, ...
+function stageAt(t) {
+  const n = state.images.length, H = holdSecs(), T = wipeSecs();
+  const fn = easeFns[$('easing').value] || easeFns.io;
+  let u = Math.max(0, t);
+  for (let j = 0; j < n; j++) {
+    if (u < H) return j;
+    u -= H;
+    if (j < n - 1) {
+      if (u < T) return j + fn(u / T);
+      u -= T;
+    }
+  }
+  return n - 1;
+}
 
 function animDividers(t) {
-  const n = state.images.length, hold = holdSecs(), wipe = wipeSecs();
-  const p = Math.min(1, Math.max(0, (t - hold) / wipe));
+  const n = state.images.length, s = stageAt(t);
   const clamp01 = x => Math.min(1, Math.max(0, x));
   const ltr = $('animDir').value === 'ltr';
   return Array.from({ length: n - 1 }, (_, i) =>
-    ltr ? clamp01(p * (n - 1) - (n - 2 - i)) : 1 - clamp01(p * (n - 1) - i));
+    ltr ? clamp01(s - (n - 2 - i)) : 1 - clamp01(s - i));
 }
 
 $('centerBtn').addEventListener('click', () => { $('animate').checked = false; $('animOpts').style.display = 'none'; resetDividers(); });
@@ -449,6 +483,7 @@ window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') retu
 function frame() {
   if (!state.exporting) {
     const now = (performance.now() - state.t0) / 1000;
+    $('clipTotal').textContent = `clip length ${totalSecs().toFixed(1)} s`;
     if (isTiles()) draw(true, now % tilesTotal());
     else {
       if (animActive()) state.dividers = animDividers(now % totalSecs());
