@@ -104,6 +104,10 @@
         <option value="wipe">wipe · overlay</option>
         <option value="tiles">side by side · sources → final</option>
       </select>
+      <select id="frame" title="wipe frame size">
+        <option value="first">frame: first image's size</option>
+        <option value="169">frame: 16:9</option>
+      </select>
       <button id="nameBtn">name: source 1, source 2… final</button>
     </div>
 
@@ -227,6 +231,13 @@ function sizeCanvas() {
   }
   const first = state.images[0];
   if (!first || !first.ready) return;
+  if ($('frame').value === '169') {
+    const w169 = Math.min(Math.max(...state.images.filter(v => v.ready).map(v => v.img.naturalWidth)), 3840);
+    canvas.width = w169 - (w169 % 2);
+    canvas.height = Math.round(canvas.width * 9 / 16); canvas.height -= canvas.height % 2;
+    $('info').textContent = `${state.images.length} images · canvas ${canvas.width}×${canvas.height} (16:9) · images cover-fit`;
+    return;
+  }
   const w = Math.min(first.img.naturalWidth, 3840);
   canvas.width = w;
   canvas.height = Math.round(w * first.img.naturalHeight / first.img.naturalWidth);
@@ -362,6 +373,7 @@ function draw(showLines = true, t = null) {
       const label = v.name.toUpperCase();
       const tw = ctx.measureText(label).width;
       const lx = Math.min(xs[i] + pad, xs[i + 1] - tw - pad);
+      if (xs[i + 1] - xs[i] < tw + pad * 2) return;   // region too narrow: skip label so labels never overlap
       const color = v.labelColor || LABEL_COLORS[0];
       ctx.fillStyle = color === '#1a1a1a' ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)';
       ctx.fillRect(lx - 8, pad - 6, tw + 16, ch * 0.028 + 12);
@@ -517,12 +529,14 @@ $('exportBtn').addEventListener('click', async () => {
 function applyLayout() {
   const t = isTiles();
   $('splitSection').style.display = t ? 'none' : '';
+  $('frame').style.display = t ? 'none' : '';
   $('clipSection').style.display = t ? '' : 'none';
   $('exportLines').parentElement.style.display = t ? 'none' : '';
   state.t0 = performance.now();
   sizeCanvas(); updateEnabled();
 }
 $('layout').addEventListener('change', applyLayout);
+$('frame').addEventListener('change', () => { sizeCanvas(); });
 
 function autoName() {
   const n = state.images.length;
